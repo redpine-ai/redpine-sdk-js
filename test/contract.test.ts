@@ -1,11 +1,14 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as sdk from '../src/index';
 import { DEFAULT_BASE_URL } from '../src/client';
 
-const DIR = resolve(__dirname, '../../spec/fixtures');
+// monorepo: typescript/test -> ../../spec; public repo: test -> ../spec
+const DIR = [resolve(__dirname, '../../spec/fixtures'), resolve(__dirname, '../spec/fixtures')].find(existsSync);
+if (!DIR) throw new Error('spec/fixtures not found next to the package');
 const files = readdirSync(DIR).filter((f) => f.endsWith('.json')).sort();
+if (files.length === 0) throw new Error('spec/fixtures is empty');
 const camel = (s: string) => s.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
 beforeEach(() => { for (const v of ['REDPINE_API_KEY', 'CONNECT_API_KEY', 'REDPINE_BASE_URL']) delete process.env[v]; });

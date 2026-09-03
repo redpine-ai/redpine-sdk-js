@@ -9,4 +9,4 @@ export type {
   SearchRequest, SearchResponse, SearchResult, QuotaInfo,
   AssistedSearchRequest, AssistedSearchResponse, CollectionsResponse,
 } from './generated/types.gen';
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
