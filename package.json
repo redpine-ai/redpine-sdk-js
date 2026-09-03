@@ -1,6 +1,6 @@
 {
   "name": "@redpine-ai/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript client for the Redpine search API",
   "license": "MIT",
   "type": "module",
