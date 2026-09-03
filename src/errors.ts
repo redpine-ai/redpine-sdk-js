@@ -25,10 +25,14 @@ export class RedpineError extends Error {
 
 /** 401: missing or invalid API key. */
 export class AuthError extends RedpineError {}
+/** 402: billing suspended, or not enough credits to unlock the requested rows. */
+export class InsufficientCredits extends RedpineError {}
 /** 403: key has no access to the requested collection. */
 export class AccessDenied extends RedpineError {}
 /** 404: collection or queryId not found. */
 export class NotFound extends RedpineError {}
+/** 410: the cached result or preview is past its 7-day window. Run the search again. */
+export class Expired extends RedpineError {}
 /** 422: request rejected (query too long, bad filter, ...). */
 export class ValidationError extends RedpineError {}
 /** 429: rate or quota limit hit. `retryAfter` is seconds when the server said. */
@@ -43,7 +47,8 @@ export class QuotaExceeded extends RedpineError {
 export class AssistedUnavailable extends RedpineError {}
 
 const BY_STATUS: Record<number, new (status: number, message: string, opts?: ErrorOpts) => RedpineError> = {
-  401: AuthError, 403: AccessDenied, 404: NotFound, 422: ValidationError, 503: AssistedUnavailable,
+  401: AuthError, 402: InsufficientCredits, 403: AccessDenied, 404: NotFound, 410: Expired,
+  422: ValidationError, 503: AssistedUnavailable,
 };
 
 function readRetryAfter(headers?: Headers | Record<string, string>): number | null {

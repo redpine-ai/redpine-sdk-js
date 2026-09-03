@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetCachedResultData, GetCachedResultErrors, GetCachedResultResponses, GetQuotaData, GetQuotaErrors, GetQuotaResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, SearchAssistedData, SearchAssistedErrors, SearchAssistedResponses, SearchCollectionData, SearchCollectionErrors, SearchCollectionResponses, SearchQueryData, SearchQueryErrors, SearchQueryResponses } from './types.gen';
+import type { GetCachedResultData, GetCachedResultErrors, GetCachedResultResponses, GetQuotaData, GetQuotaErrors, GetQuotaResponses, ListCollectionsData, ListCollectionsErrors, ListCollectionsResponses, SearchAssistedData, SearchAssistedErrors, SearchAssistedResponses, SearchCollectionData, SearchCollectionErrors, SearchCollectionResponses, SearchPreviewData, SearchPreviewErrors, SearchPreviewResponses, SearchQueryData, SearchQueryErrors, SearchQueryResponses, SearchUnlockData, SearchUnlockErrors, SearchUnlockResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -49,6 +49,23 @@ export const listCollections = <ThrowOnError extends boolean = false>(options?: 
 });
 
 /**
+ * Preview search results without charging
+ *
+ * Run the same pipeline as POST /api/v1/search/query -- same entitlement checks, same retraction filtering, same relevance ranking -- but never charge for it. Every result comes back locked, with a teaser snippet in `text` and the cost to unlock it. Works even at a zero balance. Consumes no credits, no trial query and no quota.
+ *
+ * Call POST /api/v1/search/unlock with the returned `queryId` to pay for and receive some or all of the results in full.
+ */
+export const searchPreview = <ThrowOnError extends boolean = false>(options: Options<SearchPreviewData, ThrowOnError>): RequestResult<SearchPreviewResponses, SearchPreviewErrors, ThrowOnError> => (options.client ?? client).post<SearchPreviewResponses, SearchPreviewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Search documents
  *
  * Search one or more collections using natural language or keyword queries. Results are ranked by relevance using hybrid retrieval (dense + sparse + reranking). Pass `collections` (up to 5) to search several collections in one call and receive a single merged, relevance-ranked list with per-result origin labels.
@@ -78,11 +95,28 @@ export const getQuota = <ThrowOnError extends boolean = false>(options?: Options
  * Re-fetch cached results
  *
  * Retrieve previously returned search results using the queryId from a prior search response. Returns the same results without billing. The request must use the same API key that performed the original search. Results are available for 7 days.
+ *
+ * Each result carries `locked`/`tokens`/`cost`: a result not yet paid for through POST /api/v1/search/unlock comes back as a teaser (`locked: true`), never the full text.
  */
 export const getCachedResult = <ThrowOnError extends boolean = false>(options: Options<GetCachedResultData, ThrowOnError>): RequestResult<GetCachedResultResponses, GetCachedResultErrors, ThrowOnError> => (options.client ?? client).get<GetCachedResultResponses, GetCachedResultErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/v1/search/results/{queryId}',
     ...options
+});
+
+/**
+ * Pay for previewed results and receive them in full
+ *
+ * Charges only for results not already unlocked by an earlier call against the same `queryId` -- re-sending the same ids costs nothing. Omit `resultIds` (or pass `null`) to unlock everything from the preview.
+ */
+export const searchUnlock = <ThrowOnError extends boolean = false>(options: Options<SearchUnlockData, ThrowOnError>): RequestResult<SearchUnlockResponses, SearchUnlockErrors, ThrowOnError> => (options.client ?? client).post<SearchUnlockResponses, SearchUnlockErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/v1/search/unlock',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

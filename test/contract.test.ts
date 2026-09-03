@@ -34,6 +34,8 @@ describe('contract fixtures', () => {
         case 'search': { const { query, ...rest } = a; call = client.search(query as string, rest); break; }
         case 'search_collection': { const { collection, query, ...rest } = a; call = client.searchCollection(collection as string, query as string, rest); break; }
         case 'assisted_search': { const { query, ...rest } = a; call = client.assistedSearch(query as string, rest); break; }
+        case 'preview': { const { query, ...rest } = a; call = client.preview(query as string, rest); break; }
+        case 'unlock': call = client.unlock(a.queryId as string, a.resultIds as string[] | undefined); break;
         case 'get_results': call = client.getResults(a.queryId as string); break;
         case 'quota': call = client.quota(); break;
         case 'collections': call = client.collections(); break;

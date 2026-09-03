@@ -4,10 +4,11 @@
  */
 import { createClient, type Client } from './generated/client';
 import {
-  getCachedResult, getQuota, listCollections, searchAssisted, searchCollection, searchQuery,
+  getCachedResult, getQuota, listCollections, searchAssisted, searchCollection, searchPreview, searchQuery, searchUnlock,
 } from './generated/sdk.gen';
 import type {
-  AssistedSearchResponse, CollectionsResponse, QuotaInfo, SearchResponse,
+  AssistedSearchResponse, CollectionsResponse, PreviewUnlockResponse, QuotaInfo, SearchResponse,
+  SearchResultsPreviewResponse,
 } from './generated/types.gen';
 import { AuthError, QuotaExceeded, errorFromResponse } from './errors';
 import { toFilterDict, type Filter } from './filters';
@@ -66,6 +67,13 @@ export interface AssistedSearchOptions {
   filters?: Filter | Record<string, unknown> | null;
   allowClarification?: boolean;
   includeMetadata?: boolean;
+}
+
+export interface PreviewOptions {
+  collection?: string;
+  collections?: string[];
+  limit?: number;
+  filters?: Filter | Record<string, unknown> | null;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -156,8 +164,26 @@ export class Redpine {
     return this.call(() => searchAssisted({ client: this.client, body }) as Promise<Result<AssistedSearchResponse>>);
   }
 
-  getResults(queryId: string): Promise<SearchResponse> {
-    return this.call(() => getCachedResult({ client: this.client, path: { queryId } }) as Promise<Result<SearchResponse>>);
+  /** Free: teaser rows plus the cost to unlock each. Never charged, never a quota slot. */
+  async preview(query: string, opts: PreviewOptions = {}): Promise<PreviewUnlockResponse> {
+    oneTarget(opts.collection, opts.collections);
+    const body = withFilters({
+      query,
+      ...(opts.collection != null ? { collection: opts.collection } : {}),
+      ...(opts.collections?.length ? { collections: [...opts.collections] } : {}),
+      limit: opts.limit ?? 10,
+    }, opts.filters);
+    return this.call(() => searchPreview({ client: this.client, body }) as Promise<Result<PreviewUnlockResponse>>);
+  }
+
+  /** Pay for previewed rows. Omit `resultIds` to unlock every row; re-sending paid ids is free. */
+  unlock(queryId: string, resultIds?: string[]): Promise<PreviewUnlockResponse> {
+    const body = { queryId, ...(resultIds ? { resultIds: [...resultIds] } : {}) };
+    return this.call(() => searchUnlock({ client: this.client, body }) as Promise<Result<PreviewUnlockResponse>>);
+  }
+
+  getResults(queryId: string): Promise<SearchResultsPreviewResponse> {
+    return this.call(() => getCachedResult({ client: this.client, path: { queryId } }) as Promise<Result<SearchResultsPreviewResponse>>);
   }
 
   quota(): Promise<QuotaInfo> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AccessDenied, AssistedUnavailable, AuthError, NotFound, QuotaExceeded,
+  AccessDenied, AssistedUnavailable, AuthError, Expired, InsufficientCredits, NotFound, QuotaExceeded,
   RedpineError, ValidationError, errorFromResponse,
 } from '../src/errors';
 
@@ -8,8 +8,8 @@ const body = (code = 'X', message = 'msg', requestId = 'req-1') => ({ error: { c
 
 describe('errorFromResponse', () => {
   it.each([
-    [401, AuthError], [403, AccessDenied], [404, NotFound], [422, ValidationError],
-    [429, QuotaExceeded], [503, AssistedUnavailable], [500, RedpineError], [418, RedpineError],
+    [401, AuthError], [402, InsufficientCredits], [403, AccessDenied], [404, NotFound], [410, Expired],
+    [422, ValidationError], [429, QuotaExceeded], [503, AssistedUnavailable], [500, RedpineError], [418, RedpineError],
   ])('maps %i', (status, cls) => {
     const e = errorFromResponse(status, body());
     expect(e).toBeInstanceOf(cls);

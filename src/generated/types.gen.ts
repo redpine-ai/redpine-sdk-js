@@ -229,6 +229,66 @@ export type JournalMetricExpansion = {
     sampleIssns?: Array<string>;
 };
 
+export type PreviewResult = {
+    /**
+     * Origin collection of this result — the name as requested, so a logical collection reports the logical name rather than the physical one it resolves to. Always populated.
+     */
+    collection?: string | null;
+    /**
+     * Cost to unlock this one result.
+     */
+    cost?: string | null;
+    /**
+     * Chunk/point ID
+     */
+    id: string;
+    /**
+     * True when text is a teaser rather than the full chunk
+     */
+    locked: boolean;
+    /**
+     * Document metadata (title, authors, journal, etc.). Always present on /search/preview and /search/unlock, which take no includeMetadata option. On /search/results it is null when the original search set includeMetadata to false.
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Full chunk text when `locked` is false. A short teaser snippet — never the full chunk — when `locked` is true.
+     */
+    text: string;
+    /**
+     * Billable tokens to unlock this result.
+     */
+    tokens?: number | null;
+};
+
+export type PreviewUnlockResponse = {
+    /**
+     * What THIS call charged — not a running total. Null on a preview (always free) and on an unlock whose entire delta was already unlocked.
+     */
+    costCharged?: string | null;
+    /**
+     * Cost to unlock every result not yet unlocked. An estimate, not a binding quote: it is summed from each result's own individually-rounded cost, while the amount actually charged on the next unlock is computed per collection at that call's combined token total — the two can differ by a rounding fraction.
+     */
+    costToUnlockRemaining: string;
+    /**
+     * Advisory warnings about the supplied filter — for example filtering on a field with no payload index, which is matched by scanning. The search still runs. Omitted when there are none.
+     */
+    filterWarnings?: Array<FilterWarning> | null;
+    /**
+     * What each journal-metric threshold (e.g. impactFactor >= 5) expanded to. Omitted when no metric filter was used.
+     */
+    journalMetricExpansions?: Array<JournalMetricExpansion> | null;
+    /**
+     * Pass this to POST /search/unlock.
+     */
+    queryId: string;
+    /**
+     * Every result from the query, filtered through the unlock ledger.
+     */
+    results: Array<PreviewResult>;
+};
+
 /**
  * How the endpoint read the query.
  */
@@ -299,6 +359,48 @@ export type RelevanceInfo = {
 };
 
 /**
+ * The result-selection half of SearchRequest. A preview quotes results rather than delivering them, so it takes no content-delivery options: figures are never fetched (they are not priced into the quote) and metadata is always returned. Provide exactly one of `collection` (single) or `collections` (multi).
+ */
+export type SearchPreviewRequest = {
+    /**
+     * Name of the collection to search. Mutually exclusive with `collections`.
+     */
+    collection?: string | null;
+    /**
+     * Collections to search together (max 5, unique). Each collection is searched with its own access entitlements and the results are merged into one relevance-ranked list; each result carries its origin `collection`. Mutually exclusive with `collection`.
+     */
+    collections?: Array<string> | null;
+    /**
+     * Optional metadata filter. Two accepted forms.
+     *
+     * Flat (top-level keys are ANDed): `{"journal": "Nature", "publication_date": {"gte": "2020-01-01"}}`.
+     *
+     * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`.
+     *
+     * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5678"]}]}`.
+     *
+     * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doc_id`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `license`, `open_access`, `publication_date`, `publisher`, `section`.
+     *
+     * Indexed on the editorial collections only (People Inc): `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     *
+     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1664-302X"`, `"1664302x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+     *
+     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
+     */
+    filters?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Maximum results to return (default 10, max 30)
+     */
+    limit?: number;
+    /**
+     * Natural language or keyword search query.
+     */
+    query: string;
+};
+
+/**
  * Provide exactly one of `collection` (single) or `collections` (multi-collection search).
  */
 export type SearchRequest = {
@@ -319,9 +421,9 @@ export type SearchRequest = {
      *
      * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5678"]}]}`.
      *
-     * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `doc_id`, `doi`, `issn`, `journal`, `keywords`, `publication_date`, `publisher`, `section`.
+     * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doc_id`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `license`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * Indexed on the editorial collections only (People Inc): `medical_board_approved`, `topic`, `url`.
+     * Indexed on the editorial collections only (People Inc): `last_updated_date`, `medical_board_approved`, `topic`, `url`.
      *
      * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1664-302X"`, `"1664302x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
      *
@@ -404,6 +506,40 @@ export type SearchResult = {
     text: string;
 };
 
+export type SearchResultsPreviewResponse = {
+    /**
+     * Advisory warnings about the supplied filter — for example filtering on a field with no payload index, which is matched by scanning. The search still runs. Omitted when there are none.
+     */
+    filterWarnings?: Array<FilterWarning> | null;
+    /**
+     * How each journal-metric condition resolved to ISSNs; omitted when no metric filter was used
+     */
+    journalMetricExpansions?: Array<JournalMetricExpansion> | null;
+    /**
+     * Search latency in milliseconds
+     */
+    latencyMs: number;
+    /**
+     * Unique identifier for this query, matching the original search response.
+     */
+    queryId: string;
+    /**
+     * Every result from the original search, filtered through the unlock ledger.
+     */
+    results: Array<PreviewResult>;
+};
+
+export type UnlockRequest = {
+    /**
+     * The `queryId` from a previous POST /search/preview response.
+     */
+    queryId: string;
+    /**
+     * Result ids to unlock. Omit (or pass `null`) to unlock every result from the preview. Re-sending an id that is already unlocked costs nothing — only the delta is charged.
+     */
+    resultIds?: Array<string> | null;
+};
+
 export type SearchAssistedData = {
     body: AssistedSearchRequest;
     path?: never;
@@ -477,6 +613,51 @@ export type ListCollectionsResponses = {
 };
 
 export type ListCollectionsResponse = ListCollectionsResponses[keyof ListCollectionsResponses];
+
+export type SearchPreviewData = {
+    body: SearchPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/search/preview';
+};
+
+export type SearchPreviewErrors = {
+    /**
+     * Missing or invalid API key
+     */
+    401: Error;
+    /**
+     * API key does not have access to the requested collection
+     */
+    403: Error;
+    /**
+     * Collection not found
+     */
+    404: Error;
+    /**
+     * Validation error (e.g. query too long)
+     */
+    422: Error;
+    /**
+     * This org's preview rate limit was exceeded (shared with the MCP preview tool) -- not the org's query quota, which a preview never consumes.
+     */
+    429: Error;
+    /**
+     * Search temporarily unavailable (Qdrant is down)
+     */
+    503: Error;
+};
+
+export type SearchPreviewError = SearchPreviewErrors[keyof SearchPreviewErrors];
+
+export type SearchPreviewResponses = {
+    /**
+     * Every result, locked, plus the total cost to unlock them all
+     */
+    200: PreviewUnlockResponse;
+};
+
+export type SearchPreviewResponse = SearchPreviewResponses[keyof SearchPreviewResponses];
 
 export type SearchQueryData = {
     body: SearchRequest;
@@ -579,12 +760,61 @@ export type GetCachedResultError = GetCachedResultErrors[keyof GetCachedResultEr
 
 export type GetCachedResultResponses = {
     /**
-     * Cached search results (identical to original response, with latencyMs: 0)
+     * Cached search results, filtered through the unlock ledger (latencyMs: 0)
      */
-    200: SearchResponse;
+    200: SearchResultsPreviewResponse;
 };
 
 export type GetCachedResultResponse = GetCachedResultResponses[keyof GetCachedResultResponses];
+
+export type SearchUnlockData = {
+    body: UnlockRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/search/unlock';
+};
+
+export type SearchUnlockErrors = {
+    /**
+     * Missing or invalid API key
+     */
+    401: Error;
+    /**
+     * Billing suspended for this organization, or insufficient credits for the delta
+     */
+    402: Error;
+    /**
+     * queryId not found or belongs to a different API key
+     */
+    404: Error;
+    /**
+     * The preview has expired, or was written by an older payload version
+     */
+    410: Error;
+    /**
+     * One or more resultIds are not in this preview
+     */
+    422: Error;
+    /**
+     * Rate or quota limit exceeded, or the API key's spending budget is exhausted. An unlock that buys new results counts as one query against the org's quota; a preview and a repeat unlock count for nothing. Nothing is charged when this fires.
+     */
+    429: Error;
+    /**
+     * The quota service is unavailable, so the quota slot this unlock would consume could not be counted and the unlock was refused. The refusal happens before the charge commits: nothing is charged and no result is unlocked.
+     */
+    503: Error;
+};
+
+export type SearchUnlockError = SearchUnlockErrors[keyof SearchUnlockErrors];
+
+export type SearchUnlockResponses = {
+    /**
+     * The full result set filtered through the unlock ledger, plus what this call charged
+     */
+    200: PreviewUnlockResponse;
+};
+
+export type SearchUnlockResponse = SearchUnlockResponses[keyof SearchUnlockResponses];
 
 export type SearchCollectionData = {
     /**
@@ -600,9 +830,9 @@ export type SearchCollectionData = {
          *
          * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5678"]}]}`.
          *
-         * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `doc_id`, `doi`, `issn`, `journal`, `keywords`, `publication_date`, `publisher`, `section`.
+         * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doc_id`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `license`, `open_access`, `publication_date`, `publisher`, `section`.
          *
-         * Indexed on the editorial collections only (People Inc): `medical_board_approved`, `topic`, `url`.
+         * Indexed on the editorial collections only (People Inc): `last_updated_date`, `medical_board_approved`, `topic`, `url`.
          *
          * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1664-302X"`, `"1664302x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
          *

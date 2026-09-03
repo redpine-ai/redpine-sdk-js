@@ -1,12 +1,14 @@
 export { Redpine } from './client';
-export type { RedpineOptions, SearchOptions, AssistedSearchOptions } from './client';
+export type { RedpineOptions, SearchOptions, AssistedSearchOptions, PreviewOptions } from './client';
 export { F, FieldBuilder, Filter, toFilterDict } from './filters';
 export type { FilterNode } from './filters';
 export {
-  RedpineError, AuthError, AccessDenied, NotFound, ValidationError, QuotaExceeded, AssistedUnavailable,
+  RedpineError, AuthError, InsufficientCredits, AccessDenied, NotFound, Expired, ValidationError,
+  QuotaExceeded, AssistedUnavailable,
 } from './errors';
 export type {
   SearchRequest, SearchResponse, SearchResult, QuotaInfo,
   AssistedSearchRequest, AssistedSearchResponse, CollectionsResponse,
+  SearchPreviewRequest, UnlockRequest, PreviewResult, PreviewUnlockResponse, SearchResultsPreviewResponse,
 } from './generated/types.gen';
-export const VERSION = '0.1.3';
+export const VERSION = '0.1.4';
