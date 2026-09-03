@@ -1,0 +1,20 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, registry-url: https://registry.npmjs.org }
+      # npm trusted publishing (OIDC, no token) needs npm >= 11.5.1; Node 22
+      # ships an older npm.
+      - run: npm install -g npm@^11.5.1
+      - run: pnpm install --frozen-lockfile && pnpm test && pnpm build
+      - run: npm publish --provenance --access public
