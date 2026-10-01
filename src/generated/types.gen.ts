@@ -77,7 +77,7 @@ export type AssistedSearchResponse = {
      */
     clarification?: ClarificationInfo | null;
     /**
-     * Advisory warnings about the supplied filter — for example filtering on a field with no payload index, which is matched by scanning. The search still runs. Omitted when there are none.
+     * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
     filterWarnings?: Array<FilterWarning> | null;
     /**
@@ -239,6 +239,10 @@ export type PreviewResult = {
      */
     cost?: string | null;
     /**
+     * How many figures this result carries. Reported on locked rows too — the captions and images stay behind the paywall, but the count is what tells you whether unlocking with includeFigures is worth it. 0 for text-only content.
+     */
+    figureCount: number;
+    /**
      * Chunk/point ID
      */
     id: string;
@@ -247,7 +251,7 @@ export type PreviewResult = {
      */
     locked: boolean;
     /**
-     * Document metadata (title, authors, journal, etc.). Always present on /search/preview and /search/unlock, which take no includeMetadata option. On /search/results it is null when the original search set includeMetadata to false.
+     * Document metadata (title, authors, journal, etc.). Always present on /search/preview and /search/unlock, which take no includeMetadata option. On /search/results it is null when the original search set includeMetadata to false. `figures` (captions, and `image_data` when images were requested) is present only on unlocked results — a locked result reports `figureCount` and nothing else about its figures.
      */
     metadata?: {
         [key: string]: unknown;
@@ -272,11 +276,17 @@ export type PreviewUnlockResponse = {
      */
     costToUnlockRemaining: string;
     /**
-     * Advisory warnings about the supplied filter — for example filtering on a field with no payload index, which is matched by scanning. The search still runs. Omitted when there are none.
+     * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
     filterWarnings?: Array<FilterWarning> | null;
     /**
-     * What each journal-metric threshold (e.g. impactFactor >= 5) expanded to. Omitted when no metric filter was used.
+     * The filters you sent, after validation. Omitted when no filters were sent.
+     */
+    filtersApplied?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * How each journal-metric condition resolved to ISSNs; omitted when no metric filter was used.
      */
     journalMetricExpansions?: Array<JournalMetricExpansion> | null;
     /**
@@ -375,15 +385,19 @@ export type SearchPreviewRequest = {
      *
      * Flat (top-level keys are ANDed): `{"journal": "Nature", "publication_date": {"gte": "2020-01-01"}}`.
      *
-     * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`.
+     * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`. One operator per condition, except range bounds (`gt`, `gte`, `lt`, `lte`) together; put other combinations in separate conditions under `and`.
      *
-     * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5678"]}]}`.
+     * Mixing the flat and structured forms in one filter is rejected.
      *
-     * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doc_id`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `license`, `open_access`, `publication_date`, `publisher`, `section`.
+     * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5679"]}]}`.
      *
-     * Indexed on the editorial collections only (People Inc): `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1664-302X"`, `"1664302x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+     * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     *
+     * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
+     *
+     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
      *
      * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
      */
@@ -417,15 +431,19 @@ export type SearchRequest = {
      *
      * Flat (top-level keys are ANDed): `{"journal": "Nature", "publication_date": {"gte": "2020-01-01"}}`.
      *
-     * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`.
+     * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`. One operator per condition, except range bounds (`gt`, `gte`, `lt`, `lte`) together; put other combinations in separate conditions under `and`.
      *
-     * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5678"]}]}`.
+     * Mixing the flat and structured forms in one filter is rejected.
      *
-     * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doc_id`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `license`, `open_access`, `publication_date`, `publisher`, `section`.
+     * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5679"]}]}`.
      *
-     * Indexed on the editorial collections only (People Inc): `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1664-302X"`, `"1664302x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+     * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     *
+     * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
+     *
+     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
      *
      * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
      */
@@ -464,9 +482,15 @@ export type SearchRequest = {
 
 export type SearchResponse = {
     /**
-     * Advisory warnings about the supplied filter — for example filtering on a field with no payload index, which is matched by scanning. The search still runs. Omitted when there are none.
+     * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
     filterWarnings?: Array<FilterWarning> | null;
+    /**
+     * The filters you sent, after validation. Omitted when no filters were sent.
+     */
+    filtersApplied?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * How each journal-metric condition resolved to ISSNs; omitted when no metric filter was used
      */
@@ -508,7 +532,7 @@ export type SearchResult = {
 
 export type SearchResultsPreviewResponse = {
     /**
-     * Advisory warnings about the supplied filter — for example filtering on a field with no payload index, which is matched by scanning. The search still runs. Omitted when there are none.
+     * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
     filterWarnings?: Array<FilterWarning> | null;
     /**
@@ -530,6 +554,22 @@ export type SearchResultsPreviewResponse = {
 };
 
 export type UnlockRequest = {
+    /**
+     * Maximum image height in pixels
+     */
+    imageMaxHeight?: number;
+    /**
+     * Maximum image width in pixels
+     */
+    imageMaxWidth?: number;
+    /**
+     * JPEG quality for fetched images
+     */
+    imageQuality?: number;
+    /**
+     * Fetch figure images, returned as base64 in each result's metadata. Candidates are every result unlocked under this queryId, this call's and earlier calls' alike, but at most 50 images are fetched per call: the ids in resultIds — or, when it is omitted, the results this call unlocked — get that budget first, and figures past it come back as captions with no image_data. Ask again for the ids you still want; re-sending ids already unlocked charges nothing. Free — figures are not priced into the token cost, so this changes latency and response size, never the charge. Off by default: use the preview's figureCount to decide. includeImages is a deprecated alias.
+     */
+    includeFigures?: boolean;
     /**
      * The `queryId` from a previous POST /search/preview response.
      */
@@ -737,7 +777,24 @@ export type GetCachedResultData = {
          */
         queryId: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Include figure images for results already unlocked. Free, like the rest of this endpoint: it re-delivers content that is already paid for and unlocks nothing. Applies to results that came from POST /api/v1/search/preview; a cached POST /api/v1/search/query response does not retain figures.
+         */
+        includeFigures?: boolean;
+        /**
+         * Maximum image width in pixels.
+         */
+        imageMaxWidth?: number;
+        /**
+         * Maximum image height in pixels.
+         */
+        imageMaxHeight?: number;
+        /**
+         * JPEG quality for fetched images.
+         */
+        imageQuality?: number;
+    };
     url: '/api/v1/search/results/{queryId}';
 };
 
@@ -826,15 +883,19 @@ export type SearchCollectionData = {
          *
          * Flat (top-level keys are ANDed): `{"journal": "Nature", "publication_date": {"gte": "2020-01-01"}}`.
          *
-         * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`.
+         * Structured DSL (for OR / nesting): `{"and": [{"field": "journal", "eq": "Nature"}]}`. Operators: `eq`, `ne`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `between`. Combinators: `and`, `or`, `not`. One operator per condition, except range bounds (`gt`, `gte`, `lt`, `lte`) together; put other combinations in separate conditions under `and`.
          *
-         * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5678"]}]}`.
+         * Mixing the flat and structured forms in one filter is rejected.
          *
-         * Indexed on every collection (any other field is matched by scanning and returns a `filterWarnings` entry): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doc_id`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `license`, `open_access`, `publication_date`, `publisher`, `section`.
+         * Exclusion uses `ne` / `not_in` / `not` — there is no separate syntax: `{"and": [{"field": "issn", "not_in": ["1234-5679"]}]}`.
          *
-         * Indexed on the editorial collections only (People Inc): `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+         * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
          *
-         * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1664-302X"`, `"1664302x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+         * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+         *
+         * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
+         *
+         * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
          *
          * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
          */
