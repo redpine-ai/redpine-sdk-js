@@ -399,7 +399,7 @@ export type SearchPreviewRequest = {
      *
      * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
      *
-     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
+     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 0.9 or higher, or lte 0.2 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
      */
     filters?: {
         [key: string]: unknown;
@@ -445,7 +445,7 @@ export type SearchRequest = {
      *
      * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
      *
-     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
+     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 0.9 or higher, or lte 0.2 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
      */
     filters?: {
         [key: string]: unknown;
@@ -656,6 +656,12 @@ export type ListCollectionsResponse = ListCollectionsResponses[keyof ListCollect
 
 export type SearchPreviewData = {
     body: SearchPreviewRequest;
+    headers?: {
+        /**
+         * Optional, 1-255 characters, scoped to your organization and kept for 24 hours. A repeat with the same key and the same body runs no new search: it returns the original `queryId`, rendered through the unlock ledger, so rows already unlocked come back in full with `locked: false`. Every row keeps its `cost` and `tokens`. The same key with a different body is a 422 `IDEMPOTENCY_KEY_REUSED`. A repeat while the first request is still running is a 409 `IDEMPOTENCY_KEY_IN_PROGRESS`, so retry it. If the original preview has expired, the request runs a new preview and the key moves to it. The response says which happened in `Idempotency-Status`.
+         */
+        'Idempotency-Key'?: string;
+    };
     path?: never;
     query?: never;
     url: '/api/v1/search/preview';
@@ -675,7 +681,11 @@ export type SearchPreviewErrors = {
      */
     404: Error;
     /**
-     * Validation error (e.g. query too long)
+     * IDEMPOTENCY_KEY_IN_PROGRESS: a request with this Idempotency-Key is still running
+     */
+    409: Error;
+    /**
+     * Validation error (e.g. query too long), or IDEMPOTENCY_KEY_REUSED: the Idempotency-Key was already used with a different body
      */
     422: Error;
     /**
@@ -683,7 +693,7 @@ export type SearchPreviewErrors = {
      */
     429: Error;
     /**
-     * Search temporarily unavailable (Qdrant is down)
+     * Search temporarily unavailable (Qdrant is down), or an Idempotency-Key was sent and the idempotency store (Redis) is unavailable. A keyed request fails closed rather than run without its guarantee; retry it.
      */
     503: Error;
 };
@@ -897,7 +907,7 @@ export type SearchCollectionData = {
          *
          * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
          *
-         * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index` and `journal_metric.i10_index` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response.
+         * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 0.9 or higher, or lte 0.2 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
          */
         filters?: {
             [key: string]: unknown;

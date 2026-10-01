@@ -54,6 +54,8 @@ export const listCollections = <ThrowOnError extends boolean = false>(options?: 
  * Run the same pipeline as POST /api/v1/search/query -- same entitlement checks, same retraction filtering, same relevance ranking -- but never charge for it. Every result comes back locked, with a teaser snippet in `text` and the cost to unlock it. Works even at a zero balance. Consumes no credits, no trial query and no quota.
  *
  * Call POST /api/v1/search/unlock with the returned `queryId` to pay for and receive some or all of the results in full.
+ *
+ * Send an `Idempotency-Key` header to make retries safe: a repeat with the same key and body returns the original `queryId` instead of buying the same results again under a new one.
  */
 export const searchPreview = <ThrowOnError extends boolean = false>(options: Options<SearchPreviewData, ThrowOnError>): RequestResult<SearchPreviewResponses, SearchPreviewErrors, ThrowOnError> => (options.client ?? client).post<SearchPreviewResponses, SearchPreviewErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
