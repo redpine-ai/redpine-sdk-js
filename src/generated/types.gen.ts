@@ -62,7 +62,7 @@ export type AssistedSearchRequest = {
      */
     limit?: number;
     /**
-     * Search query text
+     * Search query text, or a whole document such as a patient case or chart note (max 16000 characters)
      */
     query: string;
 };
@@ -76,6 +76,10 @@ export type AssistedSearchResponse = {
      * Set only when status is `clarification_needed`.
      */
     clarification?: ClarificationInfo | null;
+    /**
+     * A catalogue answer: what data sources, publishers or journals your key can reach. Present only when the query asked about the catalogue rather than for literature; then `results` is empty and nothing was charged (`X-Query-Cost: 0.000000`).
+     */
+    discovery?: DiscoveryAnswer | null;
     /**
      * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
@@ -138,6 +142,10 @@ export type AssistedSearchResult = {
      */
     section?: string | null;
     /**
+     * The sub-question of a multi-problem query that this result answers; null when the query was answered as a single question
+     */
+    subQuestion?: string | null;
+    /**
      * Chunk text content
      */
     text: string;
@@ -172,6 +180,209 @@ export type CollectionsResponse = {
      * Total number of accessible collections.
      */
     count: number;
+};
+
+/**
+ * A catalogue answer: what data sources, publishers or journals your key can reach. Present only when the query asked about the catalogue rather than for literature; then `results` is empty and nothing was charged (`X-Query-Cost: 0.000000`).
+ */
+export type DiscoveryAnswer = {
+    /**
+     * Set when there is a notice (today: add a payment method to unlock licensed journals).
+     */
+    callout?: DiscoveryCallout | null;
+    /**
+     * Which catalogue question was answered
+     */
+    intent: 'sources' | 'publishers' | 'journals';
+    /**
+     * How to read the h-index and IF figures; set whenever metrics are shown
+     */
+    metricsNote?: string | null;
+    nextActions?: Array<DiscoveryNextAction>;
+    /**
+     * Audit reference (disc_…)
+     */
+    queryId: string;
+    /**
+     * One block per collection
+     */
+    scopes?: Array<DiscoveryScope>;
+    /**
+     * Pre-rendered text form (what MCP shows)
+     */
+    text: string;
+    /**
+     * Topic, for a topic-scoped journals answer
+     */
+    topic?: string | null;
+};
+
+export type DiscoveryCallout = {
+    kind?: 'add_payment_method';
+    /**
+     * The notice, verbatim
+     */
+    message: string;
+};
+
+export type DiscoveryCollectionItem = {
+    /**
+     * physical, publisher, journal, curated or meta
+     */
+    collectionKind: string;
+    /**
+     * Collection description
+     */
+    description?: string | null;
+    /**
+     * Display name
+     */
+    displayName: string;
+    kind?: 'collection';
+    /**
+     * Member display names (metas only)
+     */
+    members?: Array<string> | null;
+    /**
+     * Collection name to pass to search
+     */
+    name: string;
+    /**
+     * Your organisation's price per 1000 tokens, when a single price applies
+     */
+    pricePer1000?: string | null;
+    /**
+     * Min/max member price when a meta-collection's members differ
+     */
+    priceRange?: {
+        /**
+         * Highest member price per 1000 tokens
+         */
+        max: string;
+        /**
+         * Lowest member price per 1000 tokens
+         */
+        min: string;
+        per: '1000_tokens';
+    } | null;
+    /**
+     * licensed or open_access
+     */
+    revenueModel: string;
+};
+
+export type DiscoveryJournalItem = {
+    /**
+     * h-index (OpenAlex), null when unknown
+     */
+    hIndex?: number | null;
+    /**
+     * The journal's journal_metric.impact_factor: an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. Null when unknown.
+     */
+    impactFactor?: number | null;
+    /**
+     * Linking ISSN when the journal is known to the metrics table
+     */
+    issnL?: string | null;
+    /**
+     * The journal's ISSNs present in your scope; filter on these to search it
+     */
+    issns?: Array<string>;
+    kind?: 'journal';
+    /**
+     * Publisher, when known
+     */
+    publisher?: string | null;
+    /**
+     * Journal title
+     */
+    title: string;
+};
+
+export type DiscoveryNextAction = {
+    /**
+     * search, list_collections, list_journals, request_journal
+     */
+    action: string;
+    /**
+     * A ready-to-use call or a one-line instruction
+     */
+    hint: string;
+};
+
+export type DiscoveryPublisherItem = {
+    /**
+     * Collections (display names) it appears in
+     */
+    collections?: Array<string>;
+    kind?: 'publisher';
+    /**
+     * Publisher name as stored in the corpus
+     */
+    name: string;
+};
+
+export type DiscoveryScope = {
+    /**
+     * The requested collection name
+     */
+    collection: string;
+    /**
+     * Display name of the requested collection
+     */
+    displayName: string;
+    /**
+     * Raw distinct ISSN values seen in your scope
+     */
+    issnValuesSeen?: number;
+    /**
+     * Ranked items; the `kind` of each says which shape it is.
+     */
+    items?: Array<DiscoveryJournalItem | DiscoveryCollectionItem | DiscoveryPublisherItem>;
+    /**
+     * A caveat about this block, when any
+     */
+    note?: string | null;
+    /**
+     * Rank of the first item in this page, zero-based
+     */
+    offset?: number;
+    /**
+     * Publishers present in your scope of this collection
+     */
+    publishers?: Array<string>;
+    /**
+     * How items are ordered
+     */
+    rankedBy?: 'h_index' | 'relevant_content' | null;
+    /**
+     * ISSN groups seen in the corpus but unknown to the metrics table; never counted as proved journals
+     */
+    sampledEntries?: number;
+    /**
+     * Items in this page (and rendered in the text form)
+     */
+    shown?: number;
+    /**
+     * Journals known only by a title (points with no ISSN)
+     */
+    titleOnly?: number;
+    /**
+     * Proved distinct journals (or items) in this scope
+     */
+    total: number;
+    /**
+     * True when the inventory is incomplete (limits or deadline)
+     */
+    truncatedInventory?: boolean;
+    /**
+     * Journals with no metrics (sampled or title-only entries); never ranked
+     */
+    unranked?: Array<DiscoveryJournalItem>;
+    /**
+     * ISSNs that could not be resolved to a title
+     */
+    unresolvedIssns?: number;
 };
 
 export type Error = {
@@ -257,6 +468,10 @@ export type PreviewResult = {
         [key: string]: unknown;
     } | null;
     /**
+     * How well this passage answers the query, 0 to 1, rounded to three decimals. It scores the passage, not the paper. Null when the result has no score, including rows cached before this field existed.
+     */
+    relevance?: number | null;
+    /**
      * Full chunk text when `locked` is false. A short teaser snippet — never the full chunk — when `locked` is true.
      */
     text: string;
@@ -275,6 +490,10 @@ export type PreviewUnlockResponse = {
      * Cost to unlock every result not yet unlocked. An estimate, not a binding quote: it is summed from each result's own individually-rounded cost, while the amount actually charged on the next unlock is computed per collection at that call's combined token total — the two can differ by a rounding fraction.
      */
     costToUnlockRemaining: string;
+    /**
+     * A catalogue answer: what data sources, publishers or journals your key can reach. Present only when the query asked about the catalogue rather than for literature; then `results` is empty and nothing was charged (`X-Query-Cost: 0.000000`).
+     */
+    discovery?: DiscoveryAnswer | null;
     /**
      * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
@@ -308,6 +527,10 @@ export type QueryUnderstanding = {
      */
     aspects?: Array<string>;
     /**
+     * For a long query such as a patient case: the summary the results were judged against. Empty for an ordinary query.
+     */
+    caseSummary?: string;
+    /**
      * Entities the query is about (substances, genes, diseases, organisms, methods)
      */
     entities?: Array<string>;
@@ -321,6 +544,10 @@ export type QueryUnderstanding = {
      * What the query is asking for
      */
     intent?: string;
+    /**
+     * The separate problems a long query was split into, each searched and given result slots on its own. Empty for a single-question query.
+     */
+    subQuestions?: Array<string>;
 };
 
 export type QuotaInfo = {
@@ -393,7 +620,7 @@ export type SearchPreviewRequest = {
      *
      * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     * Indexed on the editorial collections only: `has_results`, `last_updated_date`, `medical_board_approved`, `nct_id`, `overall_status`, `phases`, `topic`, `url`.
      *
      * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
      *
@@ -439,7 +666,7 @@ export type SearchRequest = {
      *
      * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     * Indexed on the editorial collections only: `has_results`, `last_updated_date`, `medical_board_approved`, `nct_id`, `overall_status`, `phases`, `topic`, `url`.
      *
      * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
      *
@@ -481,6 +708,10 @@ export type SearchRequest = {
 };
 
 export type SearchResponse = {
+    /**
+     * A catalogue answer: what data sources, publishers or journals your key can reach. Present only when the query asked about the catalogue rather than for literature; then `results` is empty and nothing was charged (`X-Query-Cost: 0.000000`).
+     */
+    discovery?: DiscoveryAnswer | null;
     /**
      * Advisory warnings about the supplied filter — for example filtering on a known field with no payload index, which is matched by scanning, or a collection excluded because it holds only open-access content and the filter asked for open_access=false. The search still runs. Omitted when there are none.
      */
@@ -524,6 +755,10 @@ export type SearchResult = {
     metadata?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * How well this passage answers the query, 0 to 1, rounded to three decimals. It scores the passage, not the paper. Null when the result has no score, including rows cached before this field existed.
+     */
+    relevance?: number | null;
     /**
      * Chunk text content
      */
@@ -653,6 +888,69 @@ export type ListCollectionsResponses = {
 };
 
 export type ListCollectionsResponse = ListCollectionsResponses[keyof ListCollectionsResponses];
+
+export type ListCollectionJournalsData = {
+    body?: never;
+    path: {
+        /**
+         * Collection name.
+         */
+        name: string;
+    };
+    query?: {
+        /**
+         * Rank journals by their relevant content on this topic.
+         */
+        topic?: string;
+        /**
+         * Narrow to one publisher.
+         */
+        publisher?: string;
+        /**
+         * Minimum h-index.
+         */
+        min_h_index?: number;
+        /**
+         * Journals per page.
+         */
+        limit?: number;
+        /**
+         * Rank of the first journal to return, zero-based.
+         */
+        offset?: number;
+    };
+    url: '/api/v1/search/collections/{name}/journals';
+};
+
+export type ListCollectionJournalsErrors = {
+    /**
+     * Missing or invalid API key
+     */
+    401: Error;
+    /**
+     * API key does not have access to the collection
+     */
+    403: Error;
+    /**
+     * Collection not found
+     */
+    404: Error;
+    /**
+     * The answer could not be recorded or the index is unavailable; retry
+     */
+    503: Error;
+};
+
+export type ListCollectionJournalsError = ListCollectionJournalsErrors[keyof ListCollectionJournalsErrors];
+
+export type ListCollectionJournalsResponses = {
+    /**
+     * The catalogue answer
+     */
+    200: DiscoveryAnswer;
+};
+
+export type ListCollectionJournalsResponse = ListCollectionJournalsResponses[keyof ListCollectionJournalsResponses];
 
 export type SearchPreviewData = {
     body: SearchPreviewRequest;
@@ -901,7 +1199,7 @@ export type SearchCollectionData = {
          *
          * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
          *
-         * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+         * Indexed on the editorial collections only: `has_results`, `last_updated_date`, `medical_board_approved`, `nct_id`, `overall_status`, `phases`, `topic`, `url`.
          *
          * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
          *
