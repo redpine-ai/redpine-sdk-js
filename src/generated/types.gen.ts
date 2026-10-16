@@ -238,7 +238,7 @@ export type DiscoveryCollectionItem = {
      * Display name
      */
     displayName: string;
-    kind?: 'collection';
+    kind: 'collection';
     /**
      * Member display names (metas only)
      */
@@ -288,7 +288,7 @@ export type DiscoveryJournalItem = {
      * The journal's ISSNs present in your scope; filter on these to search it
      */
     issns?: Array<string>;
-    kind?: 'journal';
+    kind: 'journal';
     /**
      * Publisher, when known
      */
@@ -315,7 +315,7 @@ export type DiscoveryPublisherItem = {
      * Collections (display names) it appears in
      */
     collections?: Array<string>;
-    kind?: 'publisher';
+    kind: 'publisher';
     /**
      * Publisher name as stored in the corpus
      */
@@ -352,9 +352,9 @@ export type DiscoveryScope = {
      */
     publishers?: Array<string>;
     /**
-     * How items are ordered
+     * How items are ordered: `h_index` or `relevant_content`; null when the items are not ranked
      */
-    rankedBy?: 'h_index' | 'relevant_content' | null;
+    rankedBy?: string | null;
     /**
      * ISSN groups seen in the corpus but unknown to the metrics table; never counted as proved journals
      */
@@ -468,7 +468,7 @@ export type PreviewResult = {
         [key: string]: unknown;
     } | null;
     /**
-     * How well this passage answers the query, 0 to 1, rounded to three decimals. It scores the passage, not the paper. Null when the result has no score, including rows cached before this field existed.
+     * How well this passage answers the query, 0 to 1, rounded to three decimals. Null when the result has no score, including rows cached before this field existed.
      */
     relevance?: number | null;
     /**
@@ -756,7 +756,7 @@ export type SearchResult = {
         [key: string]: unknown;
     } | null;
     /**
-     * How well this passage answers the query, 0 to 1, rounded to three decimals. It scores the passage, not the paper. Null when the result has no score, including rows cached before this field existed.
+     * How well this passage answers the query, 0 to 1, rounded to three decimals. Null when the result has no score, including rows cached before this field existed.
      */
     relevance?: number | null;
     /**
@@ -1000,7 +1000,7 @@ export type SearchPreviewError = SearchPreviewErrors[keyof SearchPreviewErrors];
 
 export type SearchPreviewResponses = {
     /**
-     * Every result, locked, plus the total cost to unlock them all
+     * The results, each locked unless an Idempotency-Key replay finds it already unlocked, plus the total cost to unlock the rest
      */
     200: PreviewUnlockResponse;
 };

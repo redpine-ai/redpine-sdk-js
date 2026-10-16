@@ -62,7 +62,7 @@ export const listCollectionJournals = <ThrowOnError extends boolean = false>(opt
 /**
  * Preview search results without charging
  *
- * Run the same pipeline as POST /api/v1/search/query -- same entitlement checks, same retraction filtering, same relevance ranking -- but never charge for it. Every result comes back locked, with a teaser snippet in `text` and the cost to unlock it. Works even at a zero balance. Consumes no credits, no trial query and no quota.
+ * Run the same pipeline as POST /api/v1/search/query -- same entitlement checks, same retraction filtering, same relevance ranking -- but never charge for it. Every result of a new preview comes back locked, with a teaser snippet in `text` and the cost to unlock it. Works even at a zero balance. Consumes no credits, no trial query and no quota.
  *
  * Call POST /api/v1/search/unlock with the returned `queryId` to pay for and receive some or all of the results in full.
  *

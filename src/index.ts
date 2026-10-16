@@ -11,4 +11,4 @@ export type {
   AssistedSearchRequest, AssistedSearchResponse, CollectionsResponse,
   SearchPreviewRequest, UnlockRequest, PreviewResult, PreviewUnlockResponse, SearchResultsPreviewResponse,
 } from './generated/types.gen';
-export const VERSION = '0.1.7';
+export const VERSION = '0.1.8';
