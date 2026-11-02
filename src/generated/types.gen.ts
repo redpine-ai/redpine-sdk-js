@@ -120,7 +120,9 @@ export type AssistedSearchResult = {
      */
     collection?: string | null;
     /**
-     * Resolvable DOI link (https://doi.org/{doi})
+     * Deprecated: read metadata.doi_url. Resolvable DOI link (https://doi.org/{doi}); still set when include_metadata is false.
+     *
+     * @deprecated
      */
     doiUrl?: string | null;
     /**
@@ -277,7 +279,7 @@ export type DiscoveryJournalItem = {
      */
     hIndex?: number | null;
     /**
-     * The journal's journal_metric.impact_factor: an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. Null when unknown.
+     * The journal's journal_metric.impact_factor: an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. Its denominator normally counts as citable items the articles and reviews with at least 10 references. It is not Clarivate's Journal Impact Factor and can differ from it, especially for journals that publish many news items, letters and editorials. Null when unknown.
      */
     impactFactor?: number | null;
     /**
@@ -462,7 +464,7 @@ export type PreviewResult = {
      */
     locked: boolean;
     /**
-     * Document metadata (title, authors, journal, etc.). Always present on /search/preview and /search/unlock, which take no includeMetadata option. On /search/results it is null when the original search set includeMetadata to false. `figures` (captions, and `image_data` when images were requested) is present only on unlocked results — a locked result reports `figureCount` and nothing else about its figures.
+     * Document metadata (title, authors, journal, etc.). Always present on /search/preview and /search/unlock, which take no includeMetadata option. On /search/results it is null when the original search set includeMetadata to false. `figures` (captions, `image_data` when images were requested) is present only on unlocked results — a locked result reports `figureCount` and nothing else about its figures.
      */
     metadata?: {
         [key: string]: unknown;
@@ -620,13 +622,15 @@ export type SearchPreviewRequest = {
      *
      * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * Indexed on the editorial collections only: `has_results`, `last_updated_date`, `medical_board_approved`, `nct_id`, `overall_status`, `phases`, `topic`, `url`.
+     * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     *
+     * Indexed on the editorial collections, but only the clinical-trials collection holds data in them: `has_results`, `nct_id`, `overall_status`, `phases`.
      *
      * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
      *
-     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted. `nct_id` matching also ignores case.
      *
-     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 0.9 or higher, or lte 0.2 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
+     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. Its denominator normally counts as citable items the articles and reviews with at least 10 references. It is not Clarivate's Journal Impact Factor and can differ from it, especially for journals that publish many news items, letters and editorials. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 1.0 or higher, or lte 0.1 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
      */
     filters?: {
         [key: string]: unknown;
@@ -666,13 +670,15 @@ export type SearchRequest = {
      *
      * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
      *
-     * Indexed on the editorial collections only: `has_results`, `last_updated_date`, `medical_board_approved`, `nct_id`, `overall_status`, `phases`, `topic`, `url`.
+     * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+     *
+     * Indexed on the editorial collections, but only the clinical-trials collection holds data in them: `has_results`, `nct_id`, `overall_status`, `phases`.
      *
      * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
      *
-     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+     * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted. `nct_id` matching also ignores case.
      *
-     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 0.9 or higher, or lte 0.2 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
+     * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. Its denominator normally counts as citable items the articles and reviews with at least 10 references. It is not Clarivate's Journal Impact Factor and can differ from it, especially for journals that publish many news items, letters and editorials. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 1.0 or higher, or lte 0.1 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
      */
     filters?: {
         [key: string]: unknown;
@@ -1199,13 +1205,15 @@ export type SearchCollectionData = {
          *
          * Indexed on every collection (a field that is not a known result metadata field is rejected; a known field without an index, such as `pmid`, is matched by scanning and returns a `filterWarnings` entry, and is rejected on a collection that has no index for it): `article_type`, `chapter_authors`, `chapter_number`, `chapter_title`, `doi`, `isbn`, `issn`, `journal`, `keywords`, `open_access`, `publication_date`, `publisher`, `section`.
          *
-         * Indexed on the editorial collections only: `has_results`, `last_updated_date`, `medical_board_approved`, `nct_id`, `overall_status`, `phases`, `topic`, `url`.
+         * Indexed on the editorial collections only: `last_updated_date`, `medical_board_approved`, `topic`, `url`.
+         *
+         * Indexed on the editorial collections, but only the clinical-trials collection holds data in them: `has_results`, `nct_id`, `overall_status`, `phases`.
          *
          * `open_access` is also answered for a collection that holds only open-access content and carries no such field: `true` matches everything there, `false` (or the field under `or` / `not`) excludes that collection with a `filterWarnings` entry. `license` is returned in result metadata but is not filterable.
          *
-         * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted.
+         * `issn` accepts hyphenated or bare, upper- or lower-case X (`"1234-561X"`, `"1234561x"`). `doi` is matched case-insensitively and an optional `https://doi.org/` or `doi:` prefix is accepted. `nct_id` matching also ignores case.
          *
-         * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. It is not Clarivate's Journal Impact Factor. Journals that publish many news items, letters and editorials (for example BMJ, JAMA, The Lancet) score far below their JCR figure, because OpenAlex classifies those items as articles. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 0.9 or higher, or lte 0.2 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
+         * `journal_metric.2yr_mean_citedness`, `journal_metric.h_index`, `journal_metric.i10_index` and `journal_metric.impact_factor` accept range operators only and are resolved server-side into the matching ISSNs; see `journalMetricExpansions` in the response. `impact_factor` is an impact factor computed by Redpine from OpenAlex citation data with the JIF formula. Its denominator normally counts as citable items the articles and reviews with at least 10 references. It is not Clarivate's Journal Impact Factor and can differ from it, especially for journals that publish many news items, letters and editorials. A metric condition may match at most 35,000 journal ISSNs and a request may send at most 70,000 filter values. A threshold with one end must stay within its documented bound: journal_metric.2yr_mean_citedness: gte 1.1 or higher, or lte 0.0 or lower; journal_metric.h_index: gte 35 or higher, or lte 3 or lower; journal_metric.i10_index: gte 160 or higher (no upper bound alone); journal_metric.impact_factor: gte 1.0 or higher, or lte 0.1 or lower. On h_index and i10_index, gt N counts as gte N+1 and lt N as lte N-1. A range with both ends (gte with lte, or between) may sit anywhere if it matches no more than 35,000 ISSNs. For 'below X' use not with gte X, X at or above the metric's minimum; not also keeps documents with no journal metric, and on impact_factor journals with no impact_factor. Two conditions near their bounds use most of the 70,000 values, so a third, or a long in/not_in list beside them, can be refused.
          */
         filters?: {
             [key: string]: unknown;
